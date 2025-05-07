@@ -29,17 +29,9 @@ public class User {
     @Column(nullable = false, length = 10)
     private Role role;          // STUDENT / TEACHER
 
-    @Column(nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
     public User(String number, String name, Role role) {
         this.number = number;
         this.name = name;
         this.role = role;
-    }
-
-    @PrePersist
-    protected void onCreate() {
-        this.createdAt = LocalDateTime.now();
     }
 }
