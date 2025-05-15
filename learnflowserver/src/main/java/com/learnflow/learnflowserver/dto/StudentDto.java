@@ -1,6 +1,6 @@
 package com.learnflow.learnflowserver.dto;
 
-import com.learnflow.learnflowserver.entity.User;
+import com.learnflow.learnflowserver.domain.User;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;

@@ -1,7 +1,7 @@
 package com.learnflow.learnflowserver.dto;
 
-import com.learnflow.learnflowserver.entity.Status;
-import com.learnflow.learnflowserver.entity.StudentStatus;
+import com.learnflow.learnflowserver.domain.common.enums.Status;
+import com.learnflow.learnflowserver.domain.common.enums.StudentStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;

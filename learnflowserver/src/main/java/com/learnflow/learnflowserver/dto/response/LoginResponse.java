@@ -1,6 +1,6 @@
 package com.learnflow.learnflowserver.dto.response;
 
-import com.learnflow.learnflowserver.entity.Role;
+import com.learnflow.learnflowserver.domain.common.enums.Role;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;

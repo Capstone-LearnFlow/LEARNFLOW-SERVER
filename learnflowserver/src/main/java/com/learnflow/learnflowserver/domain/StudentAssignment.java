@@ -1,5 +1,6 @@
-package com.learnflow.learnflowserver.entity;
+package com.learnflow.learnflowserver.domain;
 
+import com.learnflow.learnflowserver.domain.common.enums.StudentStatus;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;

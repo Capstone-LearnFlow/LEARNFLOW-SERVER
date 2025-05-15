@@ -1,7 +1,7 @@
 package com.learnflow.learnflowserver.service;
 
 import com.learnflow.learnflowserver.dto.response.LoginResponse;
-import com.learnflow.learnflowserver.entity.User;
+import com.learnflow.learnflowserver.domain.User;
 import com.learnflow.learnflowserver.repository.UserRepository;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
