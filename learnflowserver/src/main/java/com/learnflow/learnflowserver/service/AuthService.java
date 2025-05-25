@@ -1,15 +1,19 @@
 package com.learnflow.learnflowserver.service;
 
 import com.learnflow.learnflowserver.dto.response.LoginResponse;
-import com.learnflow.learnflowserver.entity.User;
+import com.learnflow.learnflowserver.domain.User;
 import com.learnflow.learnflowserver.repository.UserRepository;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import com.learnflow.learnflowserver.util.CookieUtil;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -37,4 +41,24 @@ public class AuthService {
     public void logout(HttpServletResponse response) {
         cookieUtil.deleteCookie(response, "user");
     }
+
+    public User getCurrentUser() {
+        ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        if (attributes == null) {
+            throw new IllegalStateException("현재 요청 컨텍스트를 찾을 수 없습니다.");
+        }
+
+        HttpServletRequest request = attributes.getRequest();
+        Optional<Map<String, Object>> userInfo = cookieUtil.getCookieValue(request, "user");
+
+        if (userInfo.isEmpty()) {
+            throw new IllegalStateException("인증 정보가 없습니다.");
+        }
+
+        Long userId = ((Number) userInfo.get().get("id")).longValue();
+
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalStateException("사용자 정보를 찾을 수 없습니다."));
+    }
+
 }

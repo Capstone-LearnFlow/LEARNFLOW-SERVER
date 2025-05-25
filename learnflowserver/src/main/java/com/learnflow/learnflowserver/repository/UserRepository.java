@@ -1,6 +1,6 @@
 package com.learnflow.learnflowserver.repository;
 
-import com.learnflow.learnflowserver.entity.User;
+import com.learnflow.learnflowserver.domain.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;

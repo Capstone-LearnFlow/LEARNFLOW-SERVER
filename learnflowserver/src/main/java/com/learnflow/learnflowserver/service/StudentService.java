@@ -1,9 +1,10 @@
 package com.learnflow.learnflowserver.service;
 
+import com.learnflow.learnflowserver.domain.common.enums.Status;
 import com.learnflow.learnflowserver.dto.AssignmentDetailDto;
 import com.learnflow.learnflowserver.dto.AssignmentSummaryDto;
 import com.learnflow.learnflowserver.dto.PhaseInfoDto;
-import com.learnflow.learnflowserver.entity.*;
+import com.learnflow.learnflowserver.domain.*;
 import com.learnflow.learnflowserver.repository.AssignmentRepository;
 import com.learnflow.learnflowserver.repository.PhaseRepository;
 import com.learnflow.learnflowserver.repository.StudentAssignmentRepository;
@@ -12,7 +13,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 

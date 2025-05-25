@@ -1,10 +1,13 @@
 package com.learnflow.learnflowserver.service;
 
+import com.learnflow.learnflowserver.domain.common.enums.Role;
+import com.learnflow.learnflowserver.domain.common.enums.Status;
+import com.learnflow.learnflowserver.domain.common.enums.StudentStatus;
 import com.learnflow.learnflowserver.dto.AssignmentSummaryForTeacherDto;
 import com.learnflow.learnflowserver.dto.StudentDto;
 import com.learnflow.learnflowserver.dto.request.AssignmentCreateRequest;
 import com.learnflow.learnflowserver.dto.PhaseRequestDto;
-import com.learnflow.learnflowserver.entity.*;
+import com.learnflow.learnflowserver.domain.*;
 import com.learnflow.learnflowserver.repository.AssignmentRepository;
 import com.learnflow.learnflowserver.repository.PhaseRepository;
 import com.learnflow.learnflowserver.repository.StudentAssignmentRepository;

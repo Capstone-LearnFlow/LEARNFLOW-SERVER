@@ -1,6 +1,6 @@
 package com.learnflow.learnflowserver.repository;
 
-import com.learnflow.learnflowserver.entity.StudentAssignment;
+import com.learnflow.learnflowserver.domain.StudentAssignment;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
