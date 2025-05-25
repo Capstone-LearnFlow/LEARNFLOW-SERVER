@@ -1,5 +1,6 @@
 package com.learnflow.learnflowserver.domain;
 
+import com.learnflow.learnflowserver.domain.common.BaseEntity;
 import com.learnflow.learnflowserver.domain.common.enums.StudentStatus;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -14,7 +15,7 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class StudentAssignment {
+public class StudentAssignment extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -35,28 +36,10 @@ public class StudentAssignment {
     @Column(nullable = false, length = 15)
     private StudentStatus status;  // NOT_STARTED / IN_PROGRESS / COMPLETED
 
-    @Column(nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @Column(nullable = false)
-    private LocalDateTime updatedAt;
-
     public StudentAssignment(User student, Assignment assignment, Integer currentPhase, StudentStatus status) {
         this.student = student;
         this.assignment = assignment;
         this.currentPhase = currentPhase;
         this.status = status;
-    }
-
-    @PrePersist
-    protected void onCreate() {
-        LocalDateTime now = LocalDateTime.now();
-        this.createdAt = now;
-        this.updatedAt = now;
-    }
-
-    @PreUpdate
-    protected void onUpdate() {
-        this.updatedAt = LocalDateTime.now();
     }
 }

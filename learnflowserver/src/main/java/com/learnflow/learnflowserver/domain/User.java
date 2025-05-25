@@ -1,5 +1,6 @@
 package com.learnflow.learnflowserver.domain;
 
+import com.learnflow.learnflowserver.domain.common.BaseEntity;
 import com.learnflow.learnflowserver.domain.common.enums.Role;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -12,7 +13,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class User {
+public class User extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

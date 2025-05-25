@@ -1,5 +1,6 @@
 package com.learnflow.learnflowserver.domain;
 
+import com.learnflow.learnflowserver.domain.common.BaseEntity;
 import com.learnflow.learnflowserver.domain.common.enums.Status;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -14,7 +15,7 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class Phase {
+public class Phase extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

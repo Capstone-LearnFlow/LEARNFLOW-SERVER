@@ -42,6 +42,9 @@ public class Node extends BaseEntity {
     @OneToMany(mappedBy = "parent", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Node> children = new ArrayList<>();
 
+    @OneToMany(mappedBy = "node", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Evidence> evidences = new ArrayList<>();
+
     @Enumerated(EnumType.STRING)
     private NodeType type;
 

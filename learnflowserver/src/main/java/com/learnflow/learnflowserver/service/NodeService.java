@@ -8,6 +8,7 @@ import com.learnflow.learnflowserver.domain.common.enums.NodeType;
 import com.learnflow.learnflowserver.dto.request.EvidenceCreateRequest;
 import com.learnflow.learnflowserver.dto.request.NodeCreateRequest;
 import com.learnflow.learnflowserver.dto.response.EvidenceResponse;
+import com.learnflow.learnflowserver.dto.response.NodeDetailResponse;
 import com.learnflow.learnflowserver.dto.response.NodeResponse;
 import com.learnflow.learnflowserver.repository.EvidenceRepository;
 import com.learnflow.learnflowserver.repository.NodeRepository;
@@ -82,4 +83,22 @@ public class NodeService {
 
         return NodeResponse.of(savedNode, evidenceResponses);
     }
+
+    public NodeDetailResponse getNodeDetail(Long nodeId) {
+        // 노드 조회
+        Node node = nodeRepository.findById(nodeId)
+                .orElseThrow(() -> new IllegalArgumentException("해당 노드를 찾을 수 없습니다."));
+
+        // 노드에 연결된 근거들 찾기
+        List<Evidence> evidences = node.getEvidences();
+
+        // 근거 목록 변환
+        List<EvidenceResponse> evidenceResponses = evidences.stream()
+                .map(EvidenceResponse::from)
+                .collect(Collectors.toList());
+
+        // 노드 상세 정보 응답 생성
+        return NodeDetailResponse.of(node, evidenceResponses);
+    }
+
 }
