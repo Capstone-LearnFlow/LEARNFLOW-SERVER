@@ -1,5 +1,6 @@
 package com.learnflow.learnflowserver.service;
 
+import com.learnflow.learnflowserver.domain.Assignment;
 import com.learnflow.learnflowserver.domain.Evidence;
 import com.learnflow.learnflowserver.domain.Node;
 import com.learnflow.learnflowserver.domain.StudentAssignment;
@@ -38,6 +39,12 @@ public class NodeService {
         StudentAssignment studentAssignment = studentAssignmentRepository.findById(studentAssignmentId)
                 .orElseThrow(() -> new IllegalArgumentException("학생-과제 연결 정보를 찾을 수 없습니다."));
 
+        Assignment assignment = studentAssignment.getAssignment(); // 이 부분이 실제 코드와 다를 수 있음
+        if (assignment == null) {
+            throw new IllegalArgumentException("과제 정보를 찾을 수 없습니다.");
+        }
+        String title = assignment.getDescription();
+
         // AI를 통한 요약 생성 (메인 노드의 내용과 근거 목록)
         List<String> contentToSummarize = new ArrayList<>();
         contentToSummarize.add(request.getContent());
@@ -48,10 +55,9 @@ public class NodeService {
         // 메인 노드 생성 및 저장
         Node node = Node.builder()
                 .studentAssignment(studentAssignment)
-                .title(request.getTitle())
                 .content(request.getContent())
                 .summary(summaries.get(0))  // 첫 번째 요약은 메인 노드의 요약
-                .type(NodeType.MAIN)
+                .type(NodeType.CLAIM)
                 .createdBy(CreatedBy.STUDENT)
                 .isHidden(false)
                 .build();
@@ -81,13 +87,23 @@ public class NodeService {
                 .map(EvidenceResponse::from)
                 .collect(Collectors.toList());
 
-        return NodeResponse.of(savedNode, evidenceResponses);
+        return NodeResponse.of(savedNode, title, evidenceResponses);
     }
 
     public NodeDetailResponse getNodeDetail(Long nodeId) {
         // 노드 조회
         Node node = nodeRepository.findById(nodeId)
                 .orElseThrow(() -> new IllegalArgumentException("해당 노드를 찾을 수 없습니다."));
+
+        StudentAssignment studentAssignment = node.getStudentAssignment();
+        if (studentAssignment == null) {
+            throw new IllegalStateException("노드에 연결된 학생-과제 정보가 없습니다.");
+        }
+        Assignment assignment = studentAssignment.getAssignment(); // 이 부분이 실제 코드와 다를 수 있음
+        if (assignment == null) {
+            throw new IllegalArgumentException("과제 정보를 찾을 수 없습니다.");
+        }
+        String title = assignment.getDescription();
 
         // 노드에 연결된 근거들 찾기
         List<Evidence> evidences = node.getEvidences();
@@ -98,7 +114,7 @@ public class NodeService {
                 .collect(Collectors.toList());
 
         // 노드 상세 정보 응답 생성
-        return NodeDetailResponse.of(node, evidenceResponses);
+        return NodeDetailResponse.of(node, title, evidenceResponses);
     }
 
 }

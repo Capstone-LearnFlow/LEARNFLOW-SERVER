@@ -25,10 +25,10 @@ public class NodeDetailResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    public static NodeDetailResponse of(Node node, List<EvidenceResponse> evidences) {
+    public static NodeDetailResponse of(Node node, String title, List<EvidenceResponse> evidences) {
         return NodeDetailResponse.builder()
                 .id(node.getId())
-                .title(node.getTitle())
+                .title(title)
                 .content(node.getContent())
                 .summary(node.getSummary())
                 .type(node.getType())

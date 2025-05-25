@@ -24,10 +24,10 @@ public class NodeResponse {
     private List<EvidenceResponse> evidences;
     private LocalDateTime createdAt;
 
-    public static NodeResponse of(Node node, List<EvidenceResponse> evidences) {
+    public static NodeResponse of(Node node, String title, List<EvidenceResponse> evidences) {
         return NodeResponse.builder()
                 .nodeId(node.getId())
-                .title(node.getTitle())
+                .title(title)
                 .content(node.getContent())
                 .summary(node.getSummary())
                 .type(node.getType())
