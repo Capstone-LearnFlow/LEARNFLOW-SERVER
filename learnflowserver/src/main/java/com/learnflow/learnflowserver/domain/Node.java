@@ -24,10 +24,8 @@ public class Node extends BaseEntity {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "student_assignment_id")
+    @JoinColumn(name = "student_assignment_id", nullable = false)
     private StudentAssignment studentAssignment;
-
-    private String title;
 
     @Column(columnDefinition = "TEXT")
     private String content;
@@ -45,29 +43,31 @@ public class Node extends BaseEntity {
     @OneToMany(mappedBy = "node", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Evidence> evidences = new ArrayList<>();
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "triggered_by_evidence_id", nullable = true) // 이 노드를 촉발시킨 근거 (선택적)
+    private Evidence triggeredByEvidence;
+
     @Enumerated(EnumType.STRING)
     private NodeType type;
 
     @Enumerated(EnumType.STRING)
     private CreatedBy createdBy;
 
-    private boolean isHidden;
+    private boolean isHidden = false;
 
     // 연관관계 편의 메서드
     public void addChild(Node child) {
         this.children.add(child);
-        child.setParent(this);
+        child.setParentNode(this);
     }
 
-    private void setParent(Node parent) {
+    private void setParentNode(Node parent) {
         this.parent = parent;
     }
 
-    public void setStudentAssignment(StudentAssignment studentAssignment) {
-        this.studentAssignment = studentAssignment;
+    public void addEvidence(Evidence evidence) {
+        this.evidences.add(evidence);
+        evidence.setNode(this);
     }
 
-    public void setSummary(String summary) {
-        this.summary = summary;
-    }
 }
