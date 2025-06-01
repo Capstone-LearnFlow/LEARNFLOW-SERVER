@@ -53,13 +53,13 @@ public class CookieUtil {
     }
 
     public Optional<Map<String, Object>> getCookieValue(HttpServletRequest request, String name) {
-        return getCookie(request, name).map(cookie -> {
+        return getCookie(request, name).flatMap(cookie -> {
             try {
                 byte[] decodedBytes = Base64.getDecoder().decode(cookie.getValue());
                 String decodedValue = new String(decodedBytes);
-                return objectMapper.readValue(decodedValue, Map.class);
+                return Optional.of(objectMapper.readValue(decodedValue, Map.class));
             } catch (Exception e) {
-                return null;
+                return Optional.empty(); // 예외 시 Optional.empty() 반환
             }
         });
 
