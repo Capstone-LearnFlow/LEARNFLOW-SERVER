@@ -38,9 +38,11 @@ public class Node extends BaseEntity {
     private Node parent;
 
     @OneToMany(mappedBy = "parent", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
     private List<Node> children = new ArrayList<>();
 
     @OneToMany(mappedBy = "node", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
     private List<Evidence> evidences = new ArrayList<>();
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -66,8 +68,18 @@ public class Node extends BaseEntity {
     }
 
     public void addEvidence(Evidence evidence) {
+        if (this.evidences == null) {
+            this.evidences = new ArrayList<>();
+        }
         this.evidences.add(evidence);
         evidence.setNode(this);
+    }
+
+    public List<Evidence> getEvidences() {
+        if (this.evidences == null) {
+            this.evidences = new ArrayList<>();
+        }
+        return evidences;
     }
 
 }

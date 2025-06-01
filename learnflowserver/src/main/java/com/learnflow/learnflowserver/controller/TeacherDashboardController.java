@@ -4,6 +4,8 @@ import com.learnflow.learnflowserver.dto.AssignmentSummaryForTeacherDto;
 import com.learnflow.learnflowserver.dto.StudentDto;
 import com.learnflow.learnflowserver.dto.request.AssignmentCreateRequest;
 import com.learnflow.learnflowserver.service.TeacherService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -17,11 +19,13 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/teacher")
 @RequiredArgsConstructor
+@Tag(name = "선생님 대시보드 관련 API")
 public class TeacherDashboardController {
 
     private final TeacherService teacherService;
 
     @GetMapping("/students")
+    @Operation(summary = "학생 목록 조회 API")
     public ResponseEntity<Map<String, Object>> getStudents() {
         List<StudentDto> students = teacherService.getAllStudents();
 
@@ -33,6 +37,7 @@ public class TeacherDashboardController {
     }
 
     @PostMapping("/assignments")
+    @Operation(summary = "과제 생성 API")
     public ResponseEntity<Map<String, Object>> createAssignment(
             @Valid @RequestBody AssignmentCreateRequest request,
             HttpServletRequest httpRequest) {
@@ -54,6 +59,7 @@ public class TeacherDashboardController {
     }
 
     @GetMapping("/assignments")
+    @Operation(summary = "교사 과제 목록 조회 API")
     public ResponseEntity<Map<String, Object>> getAssignments(HttpServletRequest request) {
         Map<String, Object> userInfo = (Map<String, Object>) request.getAttribute("user");
         Long teacherId = Long.valueOf(userInfo.get("id").toString());

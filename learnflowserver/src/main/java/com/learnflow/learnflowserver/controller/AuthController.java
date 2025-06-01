@@ -3,6 +3,8 @@ package com.learnflow.learnflowserver.controller;
 import com.learnflow.learnflowserver.dto.request.LoginRequest;
 import com.learnflow.learnflowserver.dto.response.LoginResponse;
 import com.learnflow.learnflowserver.service.AuthService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -18,11 +20,13 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
+@Tag(name = "인증 관련 API")
 public class AuthController {
 
     private final AuthService authService;
 
     @PostMapping("/login")
+    @Operation(summary = "로그인 API")
     public ResponseEntity<Map<String, Object>> login(
             @Valid @RequestBody LoginRequest request,
             HttpServletResponse response) {
@@ -36,6 +40,7 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
+    @Operation(summary = "로그아웃 API")
     public ResponseEntity<Map<String, Object>> logout(HttpServletResponse response) {
         authService.logout(response);
 

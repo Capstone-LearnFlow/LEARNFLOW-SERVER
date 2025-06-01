@@ -11,6 +11,7 @@ import com.learnflow.learnflowserver.dto.request.NodeCreateRequest;
 import com.learnflow.learnflowserver.dto.response.EvidenceResponse;
 import com.learnflow.learnflowserver.dto.response.NodeDetailResponse;
 import com.learnflow.learnflowserver.dto.response.NodeResponse;
+import com.learnflow.learnflowserver.dto.response.NodeTreeResponse;
 import com.learnflow.learnflowserver.repository.EvidenceRepository;
 import com.learnflow.learnflowserver.repository.NodeRepository;
 import com.learnflow.learnflowserver.repository.StudentAssignmentRepository;
@@ -19,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -78,7 +80,7 @@ public class NodeService {
                     .url(evidenceRequest.getUrl())
                     .createdBy(CreatedBy.STUDENT)
                     .build();
-
+            savedNode.addEvidence(evidence);
             evidences.add(evidenceRepository.save(evidence));
         }
 
@@ -115,6 +117,82 @@ public class NodeService {
 
         // 노드 상세 정보 응답 생성
         return NodeDetailResponse.of(node, title, evidenceResponses);
+    }
+
+    public NodeTreeResponse getNodeTree(Long studentAssignmentId) {
+        StudentAssignment studentAssignment = studentAssignmentRepository.findById(studentAssignmentId)
+                .orElseThrow(() -> new IllegalArgumentException("학생-과제 연결 정보를 찾을 수 없습니다."));
+
+        // 메인 노드 찾기 (hidden이 false이고 parent가 null인 CLAIM 노드)
+        List<Node> allNodes = nodeRepository.findByStudentAssignmentAndIsHiddenFalse(studentAssignment);
+
+        Node mainNode = allNodes.stream()
+                .filter(node -> node.getParent() == null && node.getType() == NodeType.CLAIM)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("메인 노드를 찾을 수 없습니다."));
+
+        return buildNodeTree(mainNode, allNodes);
+    }
+
+    private NodeTreeResponse buildNodeTree(Node node, List<Node> allNodes) {
+        // 현재 노드의 근거들 조회
+        List<EvidenceResponse> evidences = node.getEvidences().stream()
+                .map(EvidenceResponse::from)
+                .collect(Collectors.toList());
+
+        // 자식 노드들 찾기 (현재 노드를 parent로 가지는 노드들)
+        List<NodeTreeResponse> children = allNodes.stream()
+                .filter(n -> n.getParent() != null && n.getParent().getId().equals(node.getId()))
+                .map(childNode -> buildNodeTree(childNode, allNodes))
+                .collect(Collectors.toList());
+
+        return NodeTreeResponse.builder()
+                .id(node.getId())
+                .content(node.getContent())
+                .summary(node.getSummary())
+                .type(node.getType())
+                .createdBy(node.getCreatedBy())
+                .createdAt(node.getCreatedAt())
+                .updatedAt(node.getUpdatedAt())
+                .evidences(evidences)
+                .children(children)
+                .triggeredByEvidenceId(node.getTriggeredByEvidence() != null ?
+                        node.getTriggeredByEvidence().getId() : null)
+                .build();
+    }
+
+    @Transactional
+    public NodeResponse createAnswerNode(Long studentAssignmentId, Long questionNodeId, NodeCreateRequest request) {
+        // 학생-과제 연결 정보 조회
+        StudentAssignment studentAssignment = studentAssignmentRepository.findById(studentAssignmentId)
+                .orElseThrow(() -> new IllegalArgumentException("학생-과제 연결 정보를 찾을 수 없습니다."));
+
+        // 질문 노드 조회
+        Node questionNode = nodeRepository.findById(questionNodeId)
+                .orElseThrow(() -> new IllegalArgumentException("질문 노드를 찾을 수 없습니다."));
+
+        if (questionNode.getType() != NodeType.QUESTION) {
+            throw new IllegalArgumentException("질문 노드가 아닙니다.");
+        }
+
+        // 답변 노드 생성 (Evidence 없이)
+        Node answerNode = Node.builder()
+                .studentAssignment(studentAssignment)
+                .content(request.getContent())
+                .summary("") // 답변 노드는 요약이 필요 없을 수 있음
+                .type(NodeType.ANSWER)
+                .createdBy(CreatedBy.STUDENT)
+                .parent(questionNode) // 질문 노드를 부모로 설정
+                .isHidden(false)
+                .build();
+
+        Node savedAnswerNode = nodeRepository.save(answerNode);
+
+        // 답변 노드는 Evidence를 가지지 않음
+        Assignment assignment = studentAssignment.getAssignment();
+        String title = assignment != null ? assignment.getDescription() : "";
+
+        return NodeResponse.of(savedAnswerNode, title, new ArrayList<>());
     }
 
 }
