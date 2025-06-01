@@ -3,6 +3,7 @@ package com.learnflow.learnflowserver.controller;
 import com.learnflow.learnflowserver.domain.StudentAssignment;
 import com.learnflow.learnflowserver.domain.User;
 import com.learnflow.learnflowserver.dto.request.NodeCreateRequest;
+import com.learnflow.learnflowserver.dto.request.StudentResponseRequest;
 import com.learnflow.learnflowserver.dto.response.ApiResponse;
 import com.learnflow.learnflowserver.dto.response.NodeDetailResponse;
 import com.learnflow.learnflowserver.dto.response.NodeResponse;
@@ -109,5 +110,20 @@ public class StudentNodeController {
             e.printStackTrace();
             return ResponseEntity.status(500).body(ApiResponse.error("AI 응답 생성에 실패했습니다: " + e.getMessage()));
         }
+    }
+
+    @PostMapping("/{assignment_id}/responses")
+    @Operation(summary = "학생 응답 생성 API (답변/재반박)")
+    public ResponseEntity<ApiResponse<NodeResponse>> createStudentResponse(
+            @PathVariable("assignment_id") Long assignmentId,
+            @RequestBody StudentResponseRequest request) {
+
+        User currentUser = authService.getCurrentUser();
+        StudentAssignment studentAssignment = studentAssignmentRepository.findByStudentIdAndAssignmentId(
+                        currentUser.getId(), assignmentId)
+                .orElseThrow(() -> new IllegalArgumentException("해당 학생에게 할당된 과제를 찾을 수 없습니다."));
+
+        NodeResponse response = nodeService.createStudentResponse(studentAssignment.getId(), request);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 }

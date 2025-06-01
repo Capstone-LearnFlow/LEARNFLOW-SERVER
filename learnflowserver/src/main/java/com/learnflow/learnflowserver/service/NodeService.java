@@ -6,8 +6,10 @@ import com.learnflow.learnflowserver.domain.Node;
 import com.learnflow.learnflowserver.domain.StudentAssignment;
 import com.learnflow.learnflowserver.domain.common.enums.CreatedBy;
 import com.learnflow.learnflowserver.domain.common.enums.NodeType;
+import com.learnflow.learnflowserver.domain.common.enums.TargetType;
 import com.learnflow.learnflowserver.dto.request.EvidenceCreateRequest;
 import com.learnflow.learnflowserver.dto.request.NodeCreateRequest;
+import com.learnflow.learnflowserver.dto.request.StudentResponseRequest;
 import com.learnflow.learnflowserver.dto.response.EvidenceResponse;
 import com.learnflow.learnflowserver.dto.response.NodeDetailResponse;
 import com.learnflow.learnflowserver.dto.response.NodeResponse;
@@ -179,11 +181,25 @@ public class NodeService {
     }
 
     @Transactional
-    public NodeResponse createAnswerNode(Long studentAssignmentId, Long questionNodeId, NodeCreateRequest request) {
-        // 학생-과제 연결 정보 조회
+    public NodeResponse createStudentResponse(Long studentAssignmentId, StudentResponseRequest request) {
         StudentAssignment studentAssignment = studentAssignmentRepository.findById(studentAssignmentId)
                 .orElseThrow(() -> new IllegalArgumentException("학생-과제 연결 정보를 찾을 수 없습니다."));
 
+        Assignment assignment = studentAssignment.getAssignment();
+        String title = assignment != null ? assignment.getDescription() : "";
+
+        if (request.getTargetType() == TargetType.NODE) {
+            // 질문 노드에 대한 답변
+            return createAnswerNode(studentAssignment, request.getTargetId(), request.getContent(), title);
+        } else {
+            // 근거에 대한 재반박
+            return createCounterClaimNode(studentAssignment, request.getTargetId(), request.getContent(),
+                    request.getEvidences(), title);
+        }
+    }
+
+    private NodeResponse createAnswerNode(StudentAssignment studentAssignment, Long questionNodeId,
+                                          String content, String title) {
         // 질문 노드 조회
         Node questionNode = nodeRepository.findById(questionNodeId)
                 .orElseThrow(() -> new IllegalArgumentException("질문 노드를 찾을 수 없습니다."));
@@ -192,11 +208,14 @@ public class NodeService {
             throw new IllegalArgumentException("질문 노드가 아닙니다.");
         }
 
-        // 답변 노드 생성 (Evidence 없이)
+        // AI 요약 생성
+        List<String> summaries = aiClient.getSummaries(List.of(content));
+
+        // 답변 노드 생성
         Node answerNode = Node.builder()
                 .studentAssignment(studentAssignment)
-                .content(request.getContent())
-                .summary("") // 답변 노드는 요약이 필요 없을 수 있음
+                .content(content)
+                .summary(summaries.get(0))
                 .type(NodeType.ANSWER)
                 .createdBy(CreatedBy.STUDENT)
                 .parent(questionNode) // 질문 노드를 부모로 설정
@@ -204,12 +223,64 @@ public class NodeService {
                 .build();
 
         Node savedAnswerNode = nodeRepository.save(answerNode);
-
-        // 답변 노드는 Evidence를 가지지 않음
-        Assignment assignment = studentAssignment.getAssignment();
-        String title = assignment != null ? assignment.getDescription() : "";
-
         return NodeResponse.of(savedAnswerNode, title, new ArrayList<>());
+    }
+
+    private NodeResponse createCounterClaimNode(StudentAssignment studentAssignment, Long evidenceId,
+                                                String content, List<EvidenceCreateRequest> evidenceRequests,
+                                                String title) {
+        // 대상 근거 조회
+        Evidence targetEvidence = evidenceRepository.findById(evidenceId)
+                .orElseThrow(() -> new IllegalArgumentException("대상 근거를 찾을 수 없습니다."));
+
+        // AI 요약 생성
+        List<String> contentToSummarize = new ArrayList<>();
+        contentToSummarize.add(content);
+        if (evidenceRequests != null) {
+            evidenceRequests.forEach(req -> contentToSummarize.add(req.getContent()));
+        }
+
+        List<String> summaries = aiClient.getSummaries(contentToSummarize);
+
+        // 재반박 노드 생성
+        Node counterClaimNode = Node.builder()
+                .studentAssignment(studentAssignment)
+                .content(content)
+                .summary(summaries.get(0))
+                .type(NodeType.CLAIM)
+                .createdBy(CreatedBy.STUDENT)
+                .parent(targetEvidence.getNode()) // 근거가 속한 노드를 부모로 설정
+                .triggeredByEvidence(targetEvidence) // 트리거한 근거 설정
+                .isHidden(false)
+                .build();
+
+        Node savedCounterClaimNode = nodeRepository.save(counterClaimNode);
+
+        // 근거들 생성
+        List<Evidence> evidences = new ArrayList<>();
+        if (evidenceRequests != null) {
+            for (int i = 0; i < evidenceRequests.size(); i++) {
+                EvidenceCreateRequest evidenceRequest = evidenceRequests.get(i);
+                String summary = summaries.get(i + 1);
+
+                Evidence evidence = Evidence.builder()
+                        .node(savedCounterClaimNode)
+                        .content(evidenceRequest.getContent())
+                        .summary(summary)
+                        .source(evidenceRequest.getSource())
+                        .url(evidenceRequest.getUrl())
+                        .createdBy(CreatedBy.STUDENT)
+                        .build();
+                savedCounterClaimNode.addEvidence(evidence);
+                evidences.add(evidenceRepository.save(evidence));
+            }
+        }
+
+        List<EvidenceResponse> evidenceResponses = evidences.stream()
+                .map(EvidenceResponse::from)
+                .collect(Collectors.toList());
+
+        return NodeResponse.of(savedCounterClaimNode, title, evidenceResponses);
     }
 
 }
