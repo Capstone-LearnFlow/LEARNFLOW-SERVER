@@ -20,7 +20,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -123,15 +122,33 @@ public class NodeService {
         StudentAssignment studentAssignment = studentAssignmentRepository.findById(studentAssignmentId)
                 .orElseThrow(() -> new IllegalArgumentException("학생-과제 연결 정보를 찾을 수 없습니다."));
 
+        Assignment assignment = studentAssignment.getAssignment();
+
         // 메인 노드 찾기 (hidden이 false이고 parent가 null인 CLAIM 노드)
         List<Node> allNodes = nodeRepository.findByStudentAssignmentAndIsHiddenFalse(studentAssignment);
 
-        Node mainNode = allNodes.stream()
-                .filter(node -> node.getParent() == null && node.getType() == NodeType.CLAIM)
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("메인 노드를 찾을 수 없습니다."));
+        NodeTreeResponse subjectNode = NodeTreeResponse.builder()
+                .id(0L) // 주제 노드는 항상 ID 0
+                .content(assignment.getDescription()) // 과제의 주제
+                .summary(null)
+                .type(NodeType.SUBJECT)
+                .createdBy(CreatedBy.TEACHER)
+                .createdAt(assignment.getCreatedAt())
+                .updatedAt(assignment.getUpdatedAt())
+                .evidences(new ArrayList<>()) // 주제 노드는 evidence 없음
+                .children(buildSubjectChildren(allNodes)) // 학생의 CLAIM 노드들이 children
+                .triggeredByEvidenceId(null)
+                .build();
 
-        return buildNodeTree(mainNode, allNodes);
+        return subjectNode;
+    }
+
+    private List<NodeTreeResponse> buildSubjectChildren(List<Node> allNodes) {
+        // 메인 노드들 찾기 (parent가 null이고 type이 CLAIM인 노드들)
+        return allNodes.stream()
+                .filter(node -> node.getParent() == null && node.getType() == NodeType.CLAIM)
+                .map(claimNode -> buildNodeTree(claimNode, allNodes))
+                .collect(Collectors.toList());
     }
 
     private NodeTreeResponse buildNodeTree(Node node, List<Node> allNodes) {

@@ -1,5 +1,5 @@
 package com.learnflow.learnflowserver.domain.common.enums;
 
 public enum NodeType {
-    CLAIM, ANSWER, COUNTER, QUESTION
+    SUBJECT, CLAIM, ANSWER, COUNTER, QUESTION
 }

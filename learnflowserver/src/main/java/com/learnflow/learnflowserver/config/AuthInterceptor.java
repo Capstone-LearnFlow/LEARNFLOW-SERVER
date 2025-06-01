@@ -19,11 +19,6 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-        String uri = request.getRequestURI();
-
-        if (uri.startsWith("/swagger-ui") || uri.startsWith("/v3/api-docs") || uri.equals("/swagger-ui.html")) {
-            return true; // Swagger는 인터셉터 무시
-        }
 
         // 쿠키에서 사용자 정보 확인
         Optional<Map<String, Object>> userInfo = cookieUtil.getCookieValue(request, "user");
@@ -35,7 +30,7 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
 
         // 교사 전용 API 엔드포인트 체크 (선택적)
-        String path = uri;
+        String path = request.getRequestURI();
         if (path.startsWith("/api/teacher")
                 && !"TEACHER".equals(userInfo.get().get("role"))) {
             response.setStatus(HttpStatus.FORBIDDEN.value());

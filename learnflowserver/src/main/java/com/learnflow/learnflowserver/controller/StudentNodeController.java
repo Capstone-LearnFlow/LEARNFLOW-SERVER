@@ -87,21 +87,6 @@ public class StudentNodeController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
-//    @PostMapping("/{assignment_id}/ai-response")
-//    public ResponseEntity<ApiResponse<List<NodeResponse>>> generateAiResponse(
-//            @PathVariable("assignment_id") Long assignmentId,
-//            @RequestBody Map<String, Object> request) {
-//
-//        User currentUser = authService.getCurrentUser();
-//        StudentAssignment studentAssignment = studentAssignmentRepository.findByStudentIdAndAssignmentId(
-//                        currentUser.getId(), assignmentId)
-//                .orElseThrow(() -> new IllegalArgumentException("해당 학생에게 할당된 과제를 찾을 수 없습니다."));
-//
-//        Integer reviewNum = (Integer) request.getOrDefault("review_num", 1);
-//        List<NodeResponse> responses = aiReviewService.generateAiResponse(studentAssignment.getId(), reviewNum);
-//
-//        return ResponseEntity.ok(ApiResponse.success(responses));
-//    }
     @PostMapping("/{assignment_id}/ai-response")
     @Operation(summary = "AI반론, 질문 생성 API")
     public ResponseEntity<ApiResponse<?>> generateAiResponse(
@@ -115,8 +100,6 @@ public class StudentNodeController {
                     .orElseThrow(() -> new IllegalArgumentException("해당 학생에게 할당된 과제를 찾을 수 없습니다."));
 
             Integer reviewNum = (Integer) request.getOrDefault("review_num", 1);
-
-            System.out.println("AI 응답 생성 시작 - studentAssignmentId: " + studentAssignment.getId() + ", reviewNum: " + reviewNum);
 
             List<NodeResponse> responses = aiReviewService.generateAiResponse(studentAssignment.getId(), reviewNum);
 
