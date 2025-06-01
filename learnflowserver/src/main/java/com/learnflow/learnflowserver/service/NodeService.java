@@ -6,14 +6,13 @@ import com.learnflow.learnflowserver.domain.Node;
 import com.learnflow.learnflowserver.domain.StudentAssignment;
 import com.learnflow.learnflowserver.domain.common.enums.CreatedBy;
 import com.learnflow.learnflowserver.domain.common.enums.NodeType;
+import com.learnflow.learnflowserver.domain.common.enums.StudentStatus;
 import com.learnflow.learnflowserver.domain.common.enums.TargetType;
 import com.learnflow.learnflowserver.dto.request.EvidenceCreateRequest;
 import com.learnflow.learnflowserver.dto.request.NodeCreateRequest;
 import com.learnflow.learnflowserver.dto.request.StudentResponseRequest;
-import com.learnflow.learnflowserver.dto.response.EvidenceResponse;
-import com.learnflow.learnflowserver.dto.response.NodeDetailResponse;
-import com.learnflow.learnflowserver.dto.response.NodeResponse;
-import com.learnflow.learnflowserver.dto.response.NodeTreeResponse;
+import com.learnflow.learnflowserver.dto.response.*;
+import com.learnflow.learnflowserver.repository.AssignmentRepository;
 import com.learnflow.learnflowserver.repository.EvidenceRepository;
 import com.learnflow.learnflowserver.repository.NodeRepository;
 import com.learnflow.learnflowserver.repository.StudentAssignmentRepository;
@@ -22,8 +21,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -35,6 +35,7 @@ public class NodeService {
     private final EvidenceRepository evidenceRepository;
     private final StudentAssignmentRepository studentAssignmentRepository;
     private final AiClient aiClient;
+    private final AssignmentRepository assignmentRepository;
 
     @Transactional
     public NodeResponse createMainNode(Long studentAssignmentId, NodeCreateRequest request) {
@@ -281,6 +282,183 @@ public class NodeService {
                 .collect(Collectors.toList());
 
         return NodeResponse.of(savedCounterClaimNode, title, evidenceResponses);
+    }
+
+    private String calculateDuration(LocalDateTime start, LocalDateTime end) {
+        if (start == null || end == null) return "0분";
+
+        Duration duration = Duration.between(start, end);
+        long days = duration.toDays();
+        long hours = duration.toHours() % 24;
+        long minutes = duration.toMinutes() % 60;
+
+        if (days > 0) {
+            return String.format("%d일 %d시간 %d분", days, hours, minutes);
+        } else if (hours > 0) {
+            return String.format("%d시간 %d분", hours, minutes);
+        } else {
+            return String.format("%d분", minutes);
+        }
+    }
+
+    // 과제별 전체 학생 활동 요약 조회
+    public Map<String, Object> getTreeLogsSummary(Long assignmentId, String sort, int page, int size) {
+        Assignment assignment = assignmentRepository.findById(assignmentId)
+                .orElseThrow(() -> new IllegalArgumentException("과제를 찾을 수 없습니다."));
+
+        // 과제에 할당된 모든 학생들 조회
+        List<StudentAssignment> studentAssignments = studentAssignmentRepository
+                .findByAssignmentId(assignmentId);
+
+        // 각 학생의 활동 요약 생성
+        List<StudentActivitySummary> studentSummaries = studentAssignments.stream()
+                .map(this::createStudentActivitySummary)
+                .collect(Collectors.toList());
+
+        // 정렬
+        switch (sort) {
+            case "student_name":
+                studentSummaries.sort(Comparator.comparing(StudentActivitySummary::getStudentName));
+                break;
+            case "activity_count":
+                studentSummaries.sort(Comparator.comparing(StudentActivitySummary::getNodeCount).reversed());
+                break;
+            default: // "recent"
+                studentSummaries.sort(Comparator.comparing(StudentActivitySummary::getLastActivityAt,
+                        Comparator.nullsLast(Comparator.naturalOrder())).reversed());
+        }
+
+        // 페이징
+        int start = page * size;
+        int end = Math.min(start + size, studentSummaries.size());
+        List<StudentActivitySummary> pagedSummaries = start < studentSummaries.size() ?
+                studentSummaries.subList(start, end) : new ArrayList<>();
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("assignment", Map.of(
+                "id", assignment.getId(),
+                "title", assignment.getDescription(),
+                "totalStudents", studentAssignments.size(),
+                "submittedStudents", (int) studentAssignments.stream()
+                        .filter(sa -> sa.getStatus() != StudentStatus.NOT_STARTED).count(),
+                "completionRate", calculateCompletionRate(studentAssignments)
+        ));
+        result.put("students", pagedSummaries);
+        result.put("pagination", Map.of(
+                "currentPage", page,
+                "totalPages", (int) Math.ceil((double) studentSummaries.size() / size),
+                "totalElements", studentSummaries.size(),
+                "size", size
+        ));
+
+        return result;
+    }
+
+    private StudentActivitySummary createStudentActivitySummary(StudentAssignment studentAssignment) {
+        List<Node> nodes = nodeRepository.findByStudentAssignmentOrderByCreatedAtAsc(studentAssignment);
+
+        long nodeCount = nodes.size();
+        int evidenceCount = nodes.stream()
+                .mapToInt(node -> node.getEvidences().size())
+                .sum();
+        long aiInteractions = nodes.stream()
+                .filter(node -> node.getCreatedBy() == CreatedBy.AI)
+                .count();
+
+        return StudentActivitySummary.builder()
+                .studentId(studentAssignment.getStudent().getId())
+                .studentName(studentAssignment.getStudent().getName())
+                .studentNumber(studentAssignment.getStudent().getNumber())
+                .nodeCount((int) nodeCount)
+                .evidenceCount(evidenceCount)
+                .aiInteractions((int) aiInteractions)
+                .startedAt(nodes.isEmpty() ? null : nodes.get(0).getCreatedAt())
+                .lastActivityAt(nodes.isEmpty() ? null : nodes.get(nodes.size() - 1).getCreatedAt())
+                .status(studentAssignment.getStatus())
+                .build();
+    }
+
+    private double calculateCompletionRate(List<StudentAssignment> studentAssignments) {
+        if (studentAssignments.isEmpty()) return 0.0;
+
+        long completed = studentAssignments.stream()
+                .filter(sa -> sa.getStatus() == StudentStatus.COMPLETED)
+                .count();
+        return (double) completed / studentAssignments.size() * 100.0;
+    }
+
+    public StudentTreeLogResponse getStudentTreeLogs(Long assignmentId, Long studentId) {
+        StudentAssignment studentAssignment = studentAssignmentRepository
+                .findByStudentIdAndAssignmentId(studentId, assignmentId)
+                .orElseThrow(() -> new IllegalArgumentException("해당 학생의 과제를 찾을 수 없습니다."));
+
+        // 모든 노드를 생성 시간순으로 조회
+        List<Node> nodes = nodeRepository.findByStudentAssignmentOrderByCreatedAtAsc(studentAssignment);
+
+        // 노드를 ActivityLog로 변환
+        List<ActivityLogResponse> activities = nodes.stream()
+                .map(this::convertNodeToActivityLog)
+                .collect(Collectors.toList());
+
+        // 통계 계산
+        ActivityStatistics statistics = calculateActivityStatistics(nodes);
+
+        return StudentTreeLogResponse.builder()
+                .assignment(AssignmentInfo.from(studentAssignment.getAssignment()))
+                .student(StudentInfo.from(studentAssignment.getStudent()))
+                .activities(activities)
+                .statistics(statistics)
+                .build();
+    }
+
+    private ActivityLogResponse convertNodeToActivityLog(Node node) {
+        // 근거들도 함께 포함
+        List<EvidenceLogInfo> evidences = node.getEvidences().stream()
+                .map(EvidenceLogInfo::from)
+                .collect(Collectors.toList());
+
+        return ActivityLogResponse.builder()
+                .timestamp(node.getCreatedAt())
+                .actionBy(node.getCreatedBy())
+                .node(NodeLogInfo.from(node))
+                .evidences(evidences)
+                .build();
+    }
+
+    private ActivityStatistics calculateActivityStatistics(List<Node> nodes) {
+        long studentNodes = nodes.stream()
+                .filter(node -> node.getCreatedBy() == CreatedBy.STUDENT)
+                .count();
+
+        long aiNodes = nodes.stream()
+                .filter(node -> node.getCreatedBy() == CreatedBy.AI)
+                .count();
+
+        int totalEvidences = nodes.stream()
+                .mapToInt(node -> node.getEvidences().size())
+                .sum();
+
+        int studentEvidences = nodes.stream()
+                .filter(node -> node.getCreatedBy() == CreatedBy.STUDENT)
+                .mapToInt(node -> node.getEvidences().size())
+                .sum();
+
+        LocalDateTime startedAt = nodes.isEmpty() ? null : nodes.get(0).getCreatedAt();
+        LocalDateTime lastActivityAt = nodes.isEmpty() ? null :
+                nodes.get(nodes.size() - 1).getCreatedAt();
+
+        return ActivityStatistics.builder()
+                .totalNodes((int) (studentNodes + aiNodes))
+                .studentNodes((int) studentNodes)
+                .aiNodes((int) aiNodes)
+                .aiInteractions((int) aiNodes) // AI 노드 수 = AI 상호작용 수
+                .totalEvidences(totalEvidences)
+                .studentEvidences(studentEvidences)
+                .aiEvidences(totalEvidences - studentEvidences)
+                .startedAt(startedAt)
+                .lastActivityAt(lastActivityAt)
+                .totalDuration(calculateDuration(startedAt, lastActivityAt))
+                .build();
     }
 
 }

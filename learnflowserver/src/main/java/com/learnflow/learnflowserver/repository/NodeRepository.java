@@ -13,4 +13,9 @@ import java.util.Optional;
 public interface NodeRepository extends JpaRepository<Node, Long> {
     List<Node> findByStudentAssignmentAndIsHiddenFalse(StudentAssignment studentAssignment);
     List<Node> findByStudentAssignment(StudentAssignment studentAssignment);
+    List<Node> findByStudentAssignmentOrderByCreatedAtAsc(StudentAssignment studentAssignment);
+
+    @Query("SELECT n FROM Node n WHERE n.studentAssignment.assignment.id = :assignmentId " +
+            "ORDER BY n.createdAt DESC")
+    List<Node> findByAssignmentIdOrderByCreatedAtDesc(@Param("assignmentId") Long assignmentId);
 }
