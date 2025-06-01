@@ -1,6 +1,7 @@
 package com.learnflow.learnflowserver.util;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -57,7 +58,8 @@ public class CookieUtil {
             try {
                 byte[] decodedBytes = Base64.getDecoder().decode(cookie.getValue());
                 String decodedValue = new String(decodedBytes);
-                return Optional.of(objectMapper.readValue(decodedValue, Map.class));
+                Map<String, Object> map = objectMapper.readValue(decodedValue, new TypeReference<Map<String, Object>>() {});
+                return Optional.of(map);
             } catch (Exception e) {
                 return Optional.empty(); // 예외 시 Optional.empty() 반환
             }
