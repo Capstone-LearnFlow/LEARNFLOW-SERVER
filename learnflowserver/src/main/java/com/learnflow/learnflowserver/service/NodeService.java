@@ -47,7 +47,7 @@ public class NodeService {
         if (assignment == null) {
             throw new IllegalArgumentException("과제 정보를 찾을 수 없습니다.");
         }
-        String title = assignment.getDescription();
+        String title = assignment.getTopic();
 
         // AI를 통한 요약 생성 (메인 노드의 내용과 근거 목록)
         List<String> contentToSummarize = new ArrayList<>();
@@ -107,7 +107,7 @@ public class NodeService {
         if (assignment == null) {
             throw new IllegalArgumentException("과제 정보를 찾을 수 없습니다.");
         }
-        String title = assignment.getDescription();
+        String title = assignment.getTopic();
 
         // 노드에 연결된 근거들 찾기
         List<Evidence> evidences = node.getEvidences();
@@ -132,7 +132,7 @@ public class NodeService {
 
         NodeTreeResponse subjectNode = NodeTreeResponse.builder()
                 .id(0L) // 주제 노드는 항상 ID 0
-                .content(assignment.getDescription()) // 과제의 주제
+                .content(assignment.getTopic()) // 과제의 주제
                 .summary(null)
                 .type(NodeType.SUBJECT)
                 .createdBy(CreatedBy.TEACHER)
@@ -187,7 +187,7 @@ public class NodeService {
                 .orElseThrow(() -> new IllegalArgumentException("학생-과제 연결 정보를 찾을 수 없습니다."));
 
         Assignment assignment = studentAssignment.getAssignment();
-        String title = assignment != null ? assignment.getDescription() : "";
+        String title = assignment != null ? assignment.getTopic() : "";
 
         if (request.getTargetType() == TargetType.NODE) {
             // 질문 노드에 대한 답변
@@ -337,7 +337,7 @@ public class NodeService {
         Map<String, Object> result = new HashMap<>();
         result.put("assignment", Map.of(
                 "id", assignment.getId(),
-                "title", assignment.getDescription(),
+                "title", assignment.getTopic(),
                 "totalStudents", studentAssignments.size(),
                 "submittedStudents", (int) studentAssignments.stream()
                         .filter(sa -> sa.getStatus() != StudentStatus.NOT_STARTED).count(),
