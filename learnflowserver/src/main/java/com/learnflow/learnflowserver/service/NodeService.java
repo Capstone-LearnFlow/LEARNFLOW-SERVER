@@ -8,15 +8,14 @@ import com.learnflow.learnflowserver.domain.common.enums.CreatedBy;
 import com.learnflow.learnflowserver.domain.common.enums.NodeType;
 import com.learnflow.learnflowserver.domain.common.enums.StudentStatus;
 import com.learnflow.learnflowserver.domain.common.enums.TargetType;
-import com.learnflow.learnflowserver.dto.request.EvidenceCreateRequest;
-import com.learnflow.learnflowserver.dto.request.NodeCreateRequest;
-import com.learnflow.learnflowserver.dto.request.StudentResponseRequest;
+import com.learnflow.learnflowserver.dto.request.*;
 import com.learnflow.learnflowserver.dto.response.*;
 import com.learnflow.learnflowserver.repository.AssignmentRepository;
 import com.learnflow.learnflowserver.repository.EvidenceRepository;
 import com.learnflow.learnflowserver.repository.NodeRepository;
 import com.learnflow.learnflowserver.repository.StudentAssignmentRepository;
 import com.learnflow.learnflowserver.service.ai.AiClient;
+import com.learnflow.learnflowserver.service.ai.AiReviewService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +35,7 @@ public class NodeService {
     private final StudentAssignmentRepository studentAssignmentRepository;
     private final AiClient aiClient;
     private final AssignmentRepository assignmentRepository;
+    private final AiReviewService aiReviewService;
 
     @Transactional
     public NodeResponse createMainNode(Long studentAssignmentId, NodeCreateRequest request) {
@@ -392,22 +392,40 @@ public class NodeService {
                 .findByStudentIdAndAssignmentId(studentId, assignmentId)
                 .orElseThrow(() -> new IllegalArgumentException("해당 학생의 과제를 찾을 수 없습니다."));
 
-        // 모든 노드를 생성 시간순으로 조회
-        List<Node> nodes = nodeRepository.findByStudentAssignmentOrderByCreatedAtAsc(studentAssignment);
+        // 숨김 포함 모든 노드를 생성 시간순으로 조회 (선생님은 모든 이력을 볼 수 있음)
+        List<Node> allNodes = nodeRepository.findByStudentAssignmentOrderByCreatedAtAsc(studentAssignment);
 
         // 노드를 ActivityLog로 변환
-        List<ActivityLogResponse> activities = nodes.stream()
-                .map(this::convertNodeToActivityLog)
+        List<ActivityLogResponse> activities = allNodes.stream()
+                .map(node -> convertNodeToActivityLogWithStatus(node))
                 .collect(Collectors.toList());
 
-        // 통계 계산
-        ActivityStatistics statistics = calculateActivityStatistics(nodes);
+        // 통계 계산 (현재 보이는 노드들만으로 계산)
+        List<Node> visibleNodes = allNodes.stream()
+                .filter(node -> !node.isHidden())
+                .collect(Collectors.toList());
+        ActivityStatistics statistics = calculateActivityStatistics(visibleNodes);
 
         return StudentTreeLogResponse.builder()
                 .assignment(AssignmentInfo.from(studentAssignment.getAssignment()))
                 .student(StudentInfo.from(studentAssignment.getStudent()))
                 .activities(activities)
                 .statistics(statistics)
+                .build();
+    }
+
+    private ActivityLogResponse convertNodeToActivityLogWithStatus(Node node) {
+        // 근거들도 함께 포함
+        List<EvidenceLogInfo> evidences = node.getEvidences().stream()
+                .map(EvidenceLogInfo::from)
+                .collect(Collectors.toList());
+
+        return ActivityLogResponse.builder()
+                .timestamp(node.getCreatedAt())
+                .actionBy(node.getCreatedBy())
+                .node(NodeLogInfo.fromWithStatus(node)) // 숨김 상태 포함
+                .evidences(evidences)
+                .isHidden(node.isHidden()) // 수정으로 인해 숨김 처리되었는지 표시
                 .build();
     }
 
@@ -459,6 +477,103 @@ public class NodeService {
                 .lastActivityAt(lastActivityAt)
                 .totalDuration(calculateDuration(startedAt, lastActivityAt))
                 .build();
+    }
+
+    @Transactional
+    public NodeResponse updateNode(Long studentAssignmentId, Long nodeId, NodeUpdateRequest request) {
+        // 1. 기존 노드 조회 및 권한 확인
+        Node existingNode = nodeRepository.findById(nodeId)
+                .orElseThrow(() -> new IllegalArgumentException("해당 노드를 찾을 수 없습니다."));
+
+        // 학생이 만든 노드인지 확인
+        if (existingNode.getCreatedBy() != CreatedBy.STUDENT) {
+            throw new IllegalArgumentException("학생이 생성한 노드만 수정할 수 있습니다.");
+        }
+
+        // 해당 학생의 노드인지 확인
+        if (!existingNode.getStudentAssignment().getId().equals(studentAssignmentId)) {
+            throw new IllegalArgumentException("다른 학생의 노드는 수정할 수 없습니다.");
+        }
+
+        // 2. 기존 노드와 그 하위 모든 노드들을 숨김 처리
+        hideNodeAndDescendants(existingNode);
+
+        // 3. 새로운 노드 생성
+        StudentAssignment studentAssignment = existingNode.getStudentAssignment();
+        Assignment assignment = studentAssignment.getAssignment();
+        String title = assignment.getTopic();
+
+        // AI를 통한 요약 생성
+        List<String> contentToSummarize = new ArrayList<>();
+        contentToSummarize.add(request.getContent());
+        request.getEvidences().forEach(evidence -> contentToSummarize.add(evidence.getContent()));
+
+        List<String> summaries = aiClient.getSummaries(contentToSummarize);
+
+        // 새로운 노드 생성
+        Node newNode = Node.builder()
+                .studentAssignment(studentAssignment)
+                .content(request.getContent())
+                .summary(summaries.get(0))
+                .type(existingNode.getType()) // 기존 타입 유지
+                .createdBy(CreatedBy.STUDENT)
+                .parent(existingNode.getParent()) // 기존 부모 유지
+                .triggeredByEvidence(existingNode.getTriggeredByEvidence()) // 기존 트리거 근거 유지
+                .isHidden(false)
+                .build();
+
+        Node savedNode = nodeRepository.save(newNode);
+
+        // 근거들 생성
+        List<Evidence> evidences = new ArrayList<>();
+        for (int i = 0; i < request.getEvidences().size(); i++) {
+            EvidenceUpdateRequest evidenceRequest = request.getEvidences().get(i);
+            String summary = summaries.get(i + 1);
+
+            Evidence evidence = Evidence.builder()
+                    .node(savedNode)
+                    .content(evidenceRequest.getContent())
+                    .summary(summary)
+                    .source(evidenceRequest.getSource())
+                    .url(evidenceRequest.getUrl())
+                    .createdBy(CreatedBy.STUDENT)
+                    .build();
+            savedNode.addEvidence(evidence);
+            evidences.add(evidenceRepository.save(evidence));
+        }
+
+        // 4. 새로운 트리 구조를 AI에게 전송하여 새로운 반박/질문 생성
+        requestAiResponseForUpdatedTree(studentAssignment);
+
+        // 응답 생성
+        List<EvidenceResponse> evidenceResponses = evidences.stream()
+                .map(EvidenceResponse::from)
+                .collect(Collectors.toList());
+
+        return NodeResponse.of(savedNode, title, evidenceResponses);
+    }
+
+    private void hideNodeAndDescendants(Node node) {
+        // 현재 노드 숨김 처리
+        node.setHidden(true);
+        nodeRepository.save(node);
+
+        // 현재 노드를 부모로 가지는 모든 자식 노드들 재귀적으로 숨김 처리
+        List<Node> children = nodeRepository.findByParentAndIsHiddenFalse(node);
+        for (Node child : children) {
+            hideNodeAndDescendants(child);
+        }
+    }
+
+    private void requestAiResponseForUpdatedTree(StudentAssignment studentAssignment) {
+        // 현재 보이는 노드들만 조회하여 AI에게 새로운 반박/질문 요청
+        try {
+            // 기본적으로 1개의 리뷰 요청
+            aiReviewService.generateAiResponse(studentAssignment.getId(), 1);
+        } catch (Exception e) {
+            // AI 응답 생성 실패 시 로그만 기록하고 계속 진행
+            System.err.println("노드 수정 후 AI 응답 생성 실패: " + e.getMessage());
+        }
     }
 
 }

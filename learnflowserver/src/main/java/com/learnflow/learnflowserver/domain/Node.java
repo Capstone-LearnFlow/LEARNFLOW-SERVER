@@ -67,6 +67,10 @@ public class Node extends BaseEntity {
         this.parent = parent;
     }
 
+    public void setHidden(boolean hidden) {
+        this.isHidden = hidden;
+    }
+
     public void addEvidence(Evidence evidence) {
         if (this.evidences == null) {
             this.evidences = new ArrayList<>();

@@ -16,6 +16,7 @@ public class NodeLogInfo {
     private String summary;
     private Long parentId;
     private Long triggeredByEvidenceId;
+    private boolean isHidden;
 
     public static NodeLogInfo from(Node node) {
         return NodeLogInfo.builder()
@@ -26,6 +27,11 @@ public class NodeLogInfo {
                 .parentId(node.getParent() != null ? node.getParent().getId() : null)
                 .triggeredByEvidenceId(node.getTriggeredByEvidence() != null ?
                         node.getTriggeredByEvidence().getId() : null)
+                .isHidden(node.isHidden())
                 .build();
+    }
+
+    public static NodeLogInfo fromWithStatus(Node node) {
+        return from(node);
     }
 }

@@ -33,6 +33,58 @@ public class AiReviewService {
     private final StudentAssignmentRepository studentAssignmentRepository;
     private final AiClient aiClient;
 
+//    @Transactional
+//    public List<NodeResponse> generateAiResponse(Long studentAssignmentId, Integer reviewNum) {
+//        try {
+//            // 학생-과제 연결 정보 조회
+//            StudentAssignment studentAssignment = studentAssignmentRepository.findById(studentAssignmentId)
+//                    .orElseThrow(() -> new IllegalArgumentException("학생-과제 연결 정보를 찾을 수 없습니다."));
+//
+//            // 현재 트리 구조 조회 (hidden이 false인 노드들만)
+//            List<Node> visibleNodes = nodeRepository.findByStudentAssignmentAndIsHiddenFalse(studentAssignment);
+//
+//            // 노드가 없거나 CLAIM 노드가 없으면 빈 리스트 반환
+//            boolean hasClaimNode = visibleNodes.stream()
+//                    .anyMatch(node -> node.getParent() == null && node.getType() == NodeType.CLAIM);
+//
+//            if (!hasClaimNode) {
+//                return new ArrayList<>();
+//            }
+//
+//            // 트리 구조를 AI API 형식으로 변환 (studentAssignment도 전달)
+//            TreeNodeRequest treeRequest = buildTreeRequest(visibleNodes, studentAssignment);
+//
+//            // AI API 호출 - student_id, assignment_id 추가
+//            AiReviewRequest aiRequest = AiReviewRequest.builder()
+//                    .tree(treeRequest)
+//                    .reviewNum(reviewNum)
+//                    .studentId(studentAssignment.getStudent().getId().toString())
+//                    .assignmentId(studentAssignment.getAssignment().getId().toString())
+//                    .build();
+//
+//            List<AiReviewResponse> aiResponses = aiClient.getReviews(aiRequest);
+//
+//            // AI 응답을 바탕으로 새로운 노드들 생성
+//            List<NodeResponse> responses = new ArrayList<>();
+//            for (AiReviewResponse aiResponse : aiResponses) {
+//                try {
+//                    NodeResponse nodeResponse = createAiNode(studentAssignment, aiResponse);
+//                    responses.add(nodeResponse);
+//                } catch (Exception e) {
+//                    // 개별 노드 생성 실패 시 로그 기록하고 계속 진행
+//                    System.err.println("AI 노드 생성 실패: " + e.getMessage());
+//                    e.printStackTrace();
+//                }
+//            }
+//
+//            return responses;
+//        } catch (Exception e) {
+//            System.err.println("AI 응답 생성 중 오류 발생: " + e.getMessage());
+//            e.printStackTrace();
+//            throw new RuntimeException("AI 응답 생성에 실패했습니다.", e);
+//        }
+//    }
+
     @Transactional
     public List<NodeResponse> generateAiResponse(Long studentAssignmentId, Integer reviewNum) {
         try {
@@ -43,18 +95,34 @@ public class AiReviewService {
             // 현재 트리 구조 조회 (hidden이 false인 노드들만)
             List<Node> visibleNodes = nodeRepository.findByStudentAssignmentAndIsHiddenFalse(studentAssignment);
 
+            // 디버깅: 현재 노드 상태 출력
+            System.out.println("=== 현재 트리 상태 (generateAiResponse) ===");
+            System.out.println("전체 visible 노드 수: " + visibleNodes.size());
+            for (Node node : visibleNodes) {
+                System.out.println("노드 ID: " + node.getId() +
+                        ", 타입: " + node.getType() +
+                        ", 부모: " + (node.getParent() != null ? node.getParent().getId() : "null") +
+                        ", 트리거 근거: " + (node.getTriggeredByEvidence() != null ? node.getTriggeredByEvidence().getId() : "null"));
+
+                for (Evidence evidence : node.getEvidences()) {
+                    System.out.println("  └─ 근거 ID: " + evidence.getId() + ", 내용: " +
+                            (evidence.getContent().length() > 50 ? evidence.getContent().substring(0, 50) + "..." : evidence.getContent()));
+                }
+            }
+
             // 노드가 없거나 CLAIM 노드가 없으면 빈 리스트 반환
             boolean hasClaimNode = visibleNodes.stream()
                     .anyMatch(node -> node.getParent() == null && node.getType() == NodeType.CLAIM);
 
             if (!hasClaimNode) {
+                System.out.println("CLAIM 노드가 없음. 빈 리스트 반환.");
                 return new ArrayList<>();
             }
 
-            // 트리 구조를 AI API 형식으로 변환 (studentAssignment도 전달)
+            // 트리 구조를 AI API 형식으로 변환
             TreeNodeRequest treeRequest = buildTreeRequest(visibleNodes, studentAssignment);
 
-            // AI API 호출 - student_id, assignment_id 추가
+            // AI API 호출
             AiReviewRequest aiRequest = AiReviewRequest.builder()
                     .tree(treeRequest)
                     .reviewNum(reviewNum)
@@ -62,17 +130,41 @@ public class AiReviewService {
                     .assignmentId(studentAssignment.getAssignment().getId().toString())
                     .build();
 
+            System.out.println("=== AI 서버로 전송하는 요청 ===");
+            System.out.println("Student ID: " + aiRequest.getStudentId());
+            System.out.println("Assignment ID: " + aiRequest.getAssignmentId());
+            System.out.println("Review Num: " + aiRequest.getReviewNum());
+
+            // 트리 구조 간단히 출력
+            printTreeRequestStructure(treeRequest, 0);
+
             List<AiReviewResponse> aiResponses = aiClient.getReviews(aiRequest);
+
+            System.out.println("=== AI 서버 응답 ===");
+            System.out.println("응답 개수: " + aiResponses.size());
+            for (int i = 0; i < aiResponses.size(); i++) {
+                AiReviewResponse response = aiResponses.get(i);
+                System.out.println("응답 " + (i+1) + ":");
+                System.out.println("  Parent: " + response.getParent());
+                System.out.println("  Tree Type: " + (response.getTree() != null ? response.getTree().getType() : "null"));
+                System.out.println("  Content Preview: " +
+                        (response.getTree() != null && response.getTree().getContent() != null ?
+                                (response.getTree().getContent().length() > 100 ?
+                                        response.getTree().getContent().substring(0, 100) + "..." :
+                                        response.getTree().getContent()) : "null"));
+            }
 
             // AI 응답을 바탕으로 새로운 노드들 생성
             List<NodeResponse> responses = new ArrayList<>();
             for (AiReviewResponse aiResponse : aiResponses) {
                 try {
+                    System.out.println("=== 노드 생성 시도 ===");
+                    System.out.println("Parent: " + aiResponse.getParent());
                     NodeResponse nodeResponse = createAiNode(studentAssignment, aiResponse);
                     responses.add(nodeResponse);
+                    System.out.println("노드 생성 성공 - ID: " + nodeResponse.getNodeId());
                 } catch (Exception e) {
-                    // 개별 노드 생성 실패 시 로그 기록하고 계속 진행
-                    System.err.println("AI 노드 생성 실패: " + e.getMessage());
+                    System.err.println("AI 노드 생성 실패 - Parent: " + aiResponse.getParent() + ", Error: " + e.getMessage());
                     e.printStackTrace();
                 }
             }
@@ -82,6 +174,25 @@ public class AiReviewService {
             System.err.println("AI 응답 생성 중 오류 발생: " + e.getMessage());
             e.printStackTrace();
             throw new RuntimeException("AI 응답 생성에 실패했습니다.", e);
+        }
+    }
+
+    private void printTreeRequestStructure(TreeNodeRequest node, int depth) {
+        String indent = "  ".repeat(depth);
+        System.out.println(indent + "ID: " + node.getId() + ", 타입: " + node.getType());
+
+        if (node.getChild() != null && !node.getChild().isEmpty()) {
+            System.out.println(indent + "Children:");
+            for (TreeNodeRequest child : node.getChild()) {
+                printTreeRequestStructure(child, depth + 1);
+            }
+        }
+
+        if (node.getSibling() != null && !node.getSibling().isEmpty()) {
+            System.out.println(indent + "Siblings:");
+            for (TreeNodeRequest sibling : node.getSibling()) {
+                printTreeRequestStructure(sibling, depth + 1);
+            }
         }
     }
 

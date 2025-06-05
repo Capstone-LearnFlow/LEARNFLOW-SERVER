@@ -18,4 +18,7 @@ public interface NodeRepository extends JpaRepository<Node, Long> {
     @Query("SELECT n FROM Node n WHERE n.studentAssignment.assignment.id = :assignmentId " +
             "ORDER BY n.createdAt DESC")
     List<Node> findByAssignmentIdOrderByCreatedAtDesc(@Param("assignmentId") Long assignmentId);
+
+    List<Node> findByParentAndIsHiddenFalse(Node parent);
+
 }

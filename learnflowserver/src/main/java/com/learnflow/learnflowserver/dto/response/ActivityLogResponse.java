@@ -16,4 +16,5 @@ public class ActivityLogResponse {
     private CreatedBy actionBy;
     private NodeLogInfo node;
     private List<EvidenceLogInfo> evidences;
+    private boolean isHidden;
 }

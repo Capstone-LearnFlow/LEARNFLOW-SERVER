@@ -3,6 +3,7 @@ package com.learnflow.learnflowserver.controller;
 import com.learnflow.learnflowserver.domain.StudentAssignment;
 import com.learnflow.learnflowserver.domain.User;
 import com.learnflow.learnflowserver.dto.request.NodeCreateRequest;
+import com.learnflow.learnflowserver.dto.request.NodeUpdateRequest;
 import com.learnflow.learnflowserver.dto.request.StudentResponseRequest;
 import com.learnflow.learnflowserver.dto.response.ApiResponse;
 import com.learnflow.learnflowserver.dto.response.NodeDetailResponse;
@@ -124,6 +125,27 @@ public class StudentNodeController {
                 .orElseThrow(() -> new IllegalArgumentException("해당 학생에게 할당된 과제를 찾을 수 없습니다."));
 
         NodeResponse response = nodeService.createStudentResponse(studentAssignment.getId(), request);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PutMapping("/{assignment_id}/nodes/{node_id}")
+    @Operation(summary = "노드 수정 API")
+    public ResponseEntity<ApiResponse<NodeResponse>> updateNode(
+            @PathVariable("assignment_id") Long assignmentId,
+            @PathVariable("node_id") Long nodeId,
+            @RequestBody NodeUpdateRequest request) {
+
+        // 현재 인증된 학생 정보 가져오기
+        User currentUser = authService.getCurrentUser();
+
+        // 해당 학생과 과제의 연결 정보 조회
+        StudentAssignment studentAssignment = studentAssignmentRepository.findByStudentIdAndAssignmentId(
+                        currentUser.getId(), assignmentId)
+                .orElseThrow(() -> new IllegalArgumentException("해당 학생에게 할당된 과제를 찾을 수 없습니다."));
+
+        // 노드 수정
+        NodeResponse response = nodeService.updateNode(studentAssignment.getId(), nodeId, request);
+
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 }
