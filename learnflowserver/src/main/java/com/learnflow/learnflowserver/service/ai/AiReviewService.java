@@ -203,7 +203,7 @@ public class AiReviewService {
         TreeNodeRequest subjectNode = TreeNodeRequest.builder()
                 .id("subject_0") // 주제 노드 ID
                 .type("주제")
-                .content(assignment.getDescription())
+                .content(assignment.getTopic())
                 .summary("")
                 .createdBy("TEACHER")
                 .createdAt(assignment.getCreatedAt() != null ? assignment.getCreatedAt().toString() : "")
