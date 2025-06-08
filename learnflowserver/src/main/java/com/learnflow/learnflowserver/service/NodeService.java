@@ -509,25 +509,77 @@ public class NodeService {
                 .findByStudentIdAndAssignmentId(studentId, assignmentId)
                 .orElseThrow(() -> new IllegalArgumentException("해당 학생의 과제를 찾을 수 없습니다."));
 
-        // 숨김 포함 모든 노드를 생성 시간순으로 조회 (선생님은 모든 이력을 볼 수 있음)
-        List<Node> allNodes = nodeRepository.findByStudentAssignmentOrderByCreatedAtAsc(studentAssignment);
+        Assignment assignment = studentAssignment.getAssignment();
 
-        // 노드를 ActivityLog로 변환
-        List<ActivityLogResponse> activities = allNodes.stream()
-                .map(node -> convertNodeToActivityLogWithStatus(node))
-                .collect(Collectors.toList());
+        // 숨김이 아닌 노드들만 조회 (학생용 API와 동일한 로직)
+        List<Node> visibleNodes = nodeRepository.findByStudentAssignmentAndIsHiddenFalse(studentAssignment);
 
-        // 통계 계산 (현재 보이는 노드들만으로 계산)
-        List<Node> visibleNodes = allNodes.stream()
-                .filter(node -> !node.isHidden())
-                .collect(Collectors.toList());
+        // 트리 구조로 구성 (숨김 상태 제외)
+        NodeTreeLogResponse treeStructure = buildTreeLogStructure(assignment, visibleNodes);
+
+        // 통계 계산 (현재 보이는 노드들로만 계산)
         ActivityStatistics statistics = calculateActivityStatistics(visibleNodes);
 
         return StudentTreeLogResponse.builder()
-                .assignment(AssignmentInfo.from(studentAssignment.getAssignment()))
+                .assignment(AssignmentInfo.from(assignment))
                 .student(StudentInfo.from(studentAssignment.getStudent()))
-                .activities(activities)
+                .treeStructure(treeStructure)
                 .statistics(statistics)
+                .build();
+    }
+
+    private NodeTreeLogResponse buildTreeLogStructure(Assignment assignment, List<Node> visibleNodes) {
+        // 주제 노드 생성 (루트)
+        NodeTreeLogResponse subjectNode = NodeTreeLogResponse.builder()
+                .id(0L)
+                .content(assignment.getTopic())
+                .summary(null)
+                .type(NodeType.SUBJECT)
+                .createdBy(CreatedBy.TEACHER)
+                .createdAt(assignment.getCreatedAt())
+                .updatedAt(assignment.getUpdatedAt())
+                .evidences(new ArrayList<>())
+                .children(buildTreeLogChildren(visibleNodes)) // 보이는 노드들만 전달
+                .triggeredByEvidenceId(null)
+                .isHidden(false)
+                .build();
+
+        return subjectNode;
+    }
+
+    private List<NodeTreeLogResponse> buildTreeLogChildren(List<Node> visibleNodes) {
+        // 메인 노드들 찾기 (parent가 null이고 type이 CLAIM이며 숨김이 아닌 노드들)
+        return visibleNodes.stream()
+                .filter(node -> node.getParent() == null && node.getType() == NodeType.CLAIM)
+                .map(claimNode -> buildNodeTreeLog(claimNode, visibleNodes))
+                .collect(Collectors.toList());
+    }
+
+    private NodeTreeLogResponse buildNodeTreeLog(Node node, List<Node> visibleNodes) {
+        // 현재 노드의 근거들 조회
+        List<EvidenceLogResponse> evidences = node.getEvidences().stream()
+                .map(EvidenceLogResponse::from)
+                .collect(Collectors.toList());
+
+        // 자식 노드들 찾기 (현재 노드를 parent로 가지며 숨김이 아닌 노드들)
+        List<NodeTreeLogResponse> children = visibleNodes.stream()
+                .filter(n -> n.getParent() != null && n.getParent().getId().equals(node.getId()))
+                .map(childNode -> buildNodeTreeLog(childNode, visibleNodes))
+                .collect(Collectors.toList());
+
+        return NodeTreeLogResponse.builder()
+                .id(node.getId())
+                .content(node.getContent())
+                .summary(node.getSummary())
+                .type(node.getType())
+                .createdBy(node.getCreatedBy())
+                .createdAt(node.getCreatedAt())
+                .updatedAt(node.getUpdatedAt())
+                .evidences(evidences)
+                .children(children)
+                .triggeredByEvidenceId(node.getTriggeredByEvidence() != null ?
+                        node.getTriggeredByEvidence().getId() : null)
+                .isHidden(false) // 보이는 노드들만 처리하므로 항상 false
                 .build();
     }
 

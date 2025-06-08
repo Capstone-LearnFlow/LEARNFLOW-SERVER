@@ -12,6 +12,6 @@ import java.util.List;
 public class StudentTreeLogResponse {
     private AssignmentInfo assignment;
     private StudentInfo student;
-    private List<ActivityLogResponse> activities; // TreeLogResponse -> ActivityLogResponse
-    private ActivityStatistics statistics; // LogStatistics -> ActivityStatistics
+    private NodeTreeLogResponse treeStructure; // activities 대신 treeStructure
+    private ActivityStatistics statistics;
 }
