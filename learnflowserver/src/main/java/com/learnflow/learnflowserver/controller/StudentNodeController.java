@@ -57,8 +57,8 @@ public class StudentNodeController {
 //        return ResponseEntity.ok(ApiResponse.success(response));
 //    }
     @PostMapping("/{assignment_id}/nodes")
-    @Operation(summary = "메인 노드 생성 API + AI 자동 응답")
-    public ResponseEntity<ApiResponse<StudentResponseWithAiResponse>> createMainNode(
+    @Operation(summary = "메인 노드 생성 API (AI 응답은 비동기 생성)")
+    public ResponseEntity<ApiResponse<NodeResponse>> createMainNode(
             @PathVariable("assignment_id") Long assignmentId,
             @RequestBody NodeCreateRequest request) {
 
@@ -70,8 +70,8 @@ public class StudentNodeController {
                         currentUser.getId(), assignmentId)
                 .orElseThrow(() -> new IllegalArgumentException("해당 학생에게 할당된 과제를 찾을 수 없습니다."));
 
-        // 메인 노드 생성 + AI 자동 응답
-        StudentResponseWithAiResponse response = nodeService.createMainNode(studentAssignment.getId(), request);
+        // 학생 노드만 먼저 생성 (AI는 백그라운드에서 생성)
+        NodeResponse response = nodeService.createMainNode(studentAssignment.getId(), request);
 
         return ResponseEntity.ok(ApiResponse.success(response));
     }
@@ -149,8 +149,8 @@ public class StudentNodeController {
 //        return ResponseEntity.ok(ApiResponse.success(response));
 //    }
     @PostMapping("/{assignment_id}/responses")
-    @Operation(summary = "학생 응답 생성 API (답변/재반박) + AI 자동 응답")
-    public ResponseEntity<ApiResponse<StudentResponseWithAiResponse>> createStudentResponse(
+    @Operation(summary = "학생 응답 생성 API (AI 응답은 비동기 생성)")
+    public ResponseEntity<ApiResponse<NodeResponse>> createStudentResponse(
             @PathVariable("assignment_id") Long assignmentId,
             @RequestBody StudentResponseRequest request) {
 
@@ -159,8 +159,8 @@ public class StudentNodeController {
                         currentUser.getId(), assignmentId)
                 .orElseThrow(() -> new IllegalArgumentException("해당 학생에게 할당된 과제를 찾을 수 없습니다."));
 
-        // 학생 노드 생성 + AI 자동 응답
-        StudentResponseWithAiResponse response = nodeService.createStudentResponse(studentAssignment.getId(), request);
+        // 학생 노드만 먼저 생성 (AI는 백그라운드에서 생성)
+        NodeResponse response = nodeService.createStudentResponse(studentAssignment.getId(), request);
 
         return ResponseEntity.ok(ApiResponse.success(response));
     }

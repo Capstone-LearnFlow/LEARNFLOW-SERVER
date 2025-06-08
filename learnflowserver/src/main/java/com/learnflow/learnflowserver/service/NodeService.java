@@ -17,9 +17,14 @@ import com.learnflow.learnflowserver.repository.NodeRepository;
 import com.learnflow.learnflowserver.repository.StudentAssignmentRepository;
 import com.learnflow.learnflowserver.service.ai.AiClient;
 import com.learnflow.learnflowserver.service.ai.AiReviewService;
+import com.learnflow.learnflowserver.service.ai.AsyncAiService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -37,6 +42,7 @@ public class NodeService {
     private final AiClient aiClient;
     private final AssignmentRepository assignmentRepository;
     private final AiReviewService aiReviewService;
+    private final AsyncAiService asyncAiService;
 
 //    @Transactional
 //    public NodeResponse createMainNode(Long studentAssignmentId, NodeCreateRequest request) {
@@ -95,8 +101,11 @@ public class NodeService {
 //        return NodeResponse.of(savedNode, title, evidenceResponses);
 //    }
     @Transactional
-    public StudentResponseWithAiResponse createMainNode(Long studentAssignmentId, NodeCreateRequest request) {
-        // 학생-과제 연결 정보 조회
+    public NodeResponse createMainNode(Long studentAssignmentId, NodeCreateRequest request) {
+        System.out.println("=== 학생 메인 노드 생성 시작 ===");
+        System.out.println("Thread: " + Thread.currentThread().getName());
+
+        // 학생 노드 생성
         StudentAssignment studentAssignment = studentAssignmentRepository.findById(studentAssignmentId)
                 .orElseThrow(() -> new IllegalArgumentException("학생-과제 연결 정보를 찾을 수 없습니다."));
 
@@ -143,26 +152,27 @@ public class NodeService {
             evidences.add(evidenceRepository.save(evidence));
         }
 
-        // 학생 응답 생성
+        // 응답 생성
         List<EvidenceResponse> evidenceResponses = evidences.stream()
                 .map(EvidenceResponse::from)
                 .collect(Collectors.toList());
 
-        NodeResponse studentResponse = NodeResponse.of(savedNode, title, evidenceResponses);
+        NodeResponse response = NodeResponse.of(savedNode, title, evidenceResponses);
 
-        // AI 응답 자동 생성
-        List<NodeResponse> aiResponses = new ArrayList<>();
-        try {
-            aiResponses = aiReviewService.generateAiResponse(studentAssignment.getId(), 1);
-        } catch (Exception e) {
-            System.err.println("메인 노드 생성 후 AI 응답 자동 생성 실패: " + e.getMessage());
-            e.printStackTrace();
-        }
+        System.out.println("=== 학생 메인 노드 생성 완료 ===");
+        System.out.println("Node ID: " + savedNode.getId());
 
-        return StudentResponseWithAiResponse.builder()
-                .studentResponse(studentResponse)
-                .aiResponses(aiResponses)
-                .build();
+        // 트랜잭션 커밋 후 비동기 AI 호출 등록
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                System.out.println("=== 트랜잭션 커밋 후 비동기 AI 요청 시작 ===");
+                asyncAiService.generateAiResponseAsync(studentAssignmentId);
+                System.out.println("=== 비동기 AI 요청 등록 완료 ===");
+            }
+        });
+
+        return response;
     }
 
     public NodeDetailResponse getNodeDetail(Long nodeId) {
@@ -270,7 +280,10 @@ public class NodeService {
 //        }
 //    }
     @Transactional
-    public StudentResponseWithAiResponse createStudentResponse(Long studentAssignmentId, StudentResponseRequest request) {
+    public NodeResponse createStudentResponse(Long studentAssignmentId, StudentResponseRequest request) {
+        System.out.println("=== 학생 응답 노드 생성 시작 ===");
+        System.out.println("Thread: " + Thread.currentThread().getName());
+
         StudentAssignment studentAssignment = studentAssignmentRepository.findById(studentAssignmentId)
                 .orElseThrow(() -> new IllegalArgumentException("학생-과제 연결 정보를 찾을 수 없습니다."));
 
@@ -287,19 +300,20 @@ public class NodeService {
                     request.getEvidences(), title);
         }
 
-        // AI 응답 자동 생성
-        List<NodeResponse> aiResponses = new ArrayList<>();
-        try {
-            aiResponses = aiReviewService.generateAiResponse(studentAssignment.getId(), 1);
-        } catch (Exception e) {
-            System.err.println("학생 응답 생성 후 AI 응답 자동 생성 실패: " + e.getMessage());
-            e.printStackTrace();
-        }
+        System.out.println("=== 학생 응답 노드 생성 완료 ===");
+        System.out.println("Node ID: " + studentResponse.getNodeId());
 
-        return StudentResponseWithAiResponse.builder()
-                .studentResponse(studentResponse)
-                .aiResponses(aiResponses)
-                .build();
+        // 트랜잭션 커밋 후 비동기 AI 호출 등록
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                System.out.println("=== 트랜잭션 커밋 후 비동기 AI 요청 시작 ===");
+                asyncAiService.generateAiResponseAsync(studentAssignmentId);
+                System.out.println("=== 비동기 AI 요청 등록 완료 ===");
+            }
+        });
+
+        return studentResponse;
     }
 
     private NodeResponse createAnswerNode(StudentAssignment studentAssignment, Long questionNodeId,
