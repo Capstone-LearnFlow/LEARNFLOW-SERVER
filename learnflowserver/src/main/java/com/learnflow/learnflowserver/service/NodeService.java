@@ -10,6 +10,7 @@ import com.learnflow.learnflowserver.domain.common.enums.StudentStatus;
 import com.learnflow.learnflowserver.domain.common.enums.TargetType;
 import com.learnflow.learnflowserver.dto.request.*;
 import com.learnflow.learnflowserver.dto.response.*;
+import com.learnflow.learnflowserver.dto.response.ai.StudentResponseWithAiResponse;
 import com.learnflow.learnflowserver.repository.AssignmentRepository;
 import com.learnflow.learnflowserver.repository.EvidenceRepository;
 import com.learnflow.learnflowserver.repository.NodeRepository;
@@ -37,13 +38,69 @@ public class NodeService {
     private final AssignmentRepository assignmentRepository;
     private final AiReviewService aiReviewService;
 
+//    @Transactional
+//    public NodeResponse createMainNode(Long studentAssignmentId, NodeCreateRequest request) {
+//        // 학생-과제 연결 정보 조회
+//        StudentAssignment studentAssignment = studentAssignmentRepository.findById(studentAssignmentId)
+//                .orElseThrow(() -> new IllegalArgumentException("학생-과제 연결 정보를 찾을 수 없습니다."));
+//
+//        Assignment assignment = studentAssignment.getAssignment(); // 이 부분이 실제 코드와 다를 수 있음
+//        if (assignment == null) {
+//            throw new IllegalArgumentException("과제 정보를 찾을 수 없습니다.");
+//        }
+//        String title = assignment.getTopic();
+//
+//        // AI를 통한 요약 생성 (메인 노드의 내용과 근거 목록)
+//        List<String> contentToSummarize = new ArrayList<>();
+//        contentToSummarize.add(request.getContent());
+//        request.getEvidences().forEach(evidence -> contentToSummarize.add(evidence.getContent()));
+//
+//        List<String> summaries = aiClient.getSummaries(contentToSummarize);
+//
+//        // 메인 노드 생성 및 저장
+//        Node node = Node.builder()
+//                .studentAssignment(studentAssignment)
+//                .content(request.getContent())
+//                .summary(summaries.get(0))  // 첫 번째 요약은 메인 노드의 요약
+//                .type(NodeType.CLAIM)
+//                .createdBy(CreatedBy.STUDENT)
+//                .isHidden(false)
+//                .build();
+//
+//        Node savedNode = nodeRepository.save(node);
+//
+//        // 근거 생성 및 저장
+//        List<Evidence> evidences = new ArrayList<>();
+//        for (int i = 0; i < request.getEvidences().size(); i++) {
+//            EvidenceCreateRequest evidenceRequest = request.getEvidences().get(i);
+//            String summary = summaries.get(i + 1);  // 첫 번째 요약은 메인 노드의 요약이므로 i+1
+//
+//            Evidence evidence = Evidence.builder()
+//                    .node(savedNode)
+//                    .content(evidenceRequest.getContent())
+//                    .summary(summary)
+//                    .source(evidenceRequest.getSource())
+//                    .url(evidenceRequest.getUrl())
+//                    .createdBy(CreatedBy.STUDENT)
+//                    .build();
+//            savedNode.addEvidence(evidence);
+//            evidences.add(evidenceRepository.save(evidence));
+//        }
+//
+//        // 응답 생성
+//        List<EvidenceResponse> evidenceResponses = evidences.stream()
+//                .map(EvidenceResponse::from)
+//                .collect(Collectors.toList());
+//
+//        return NodeResponse.of(savedNode, title, evidenceResponses);
+//    }
     @Transactional
-    public NodeResponse createMainNode(Long studentAssignmentId, NodeCreateRequest request) {
+    public StudentResponseWithAiResponse createMainNode(Long studentAssignmentId, NodeCreateRequest request) {
         // 학생-과제 연결 정보 조회
         StudentAssignment studentAssignment = studentAssignmentRepository.findById(studentAssignmentId)
                 .orElseThrow(() -> new IllegalArgumentException("학생-과제 연결 정보를 찾을 수 없습니다."));
 
-        Assignment assignment = studentAssignment.getAssignment(); // 이 부분이 실제 코드와 다를 수 있음
+        Assignment assignment = studentAssignment.getAssignment();
         if (assignment == null) {
             throw new IllegalArgumentException("과제 정보를 찾을 수 없습니다.");
         }
@@ -60,7 +117,7 @@ public class NodeService {
         Node node = Node.builder()
                 .studentAssignment(studentAssignment)
                 .content(request.getContent())
-                .summary(summaries.get(0))  // 첫 번째 요약은 메인 노드의 요약
+                .summary(summaries.get(0))
                 .type(NodeType.CLAIM)
                 .createdBy(CreatedBy.STUDENT)
                 .isHidden(false)
@@ -72,7 +129,7 @@ public class NodeService {
         List<Evidence> evidences = new ArrayList<>();
         for (int i = 0; i < request.getEvidences().size(); i++) {
             EvidenceCreateRequest evidenceRequest = request.getEvidences().get(i);
-            String summary = summaries.get(i + 1);  // 첫 번째 요약은 메인 노드의 요약이므로 i+1
+            String summary = summaries.get(i + 1);
 
             Evidence evidence = Evidence.builder()
                     .node(savedNode)
@@ -86,12 +143,26 @@ public class NodeService {
             evidences.add(evidenceRepository.save(evidence));
         }
 
-        // 응답 생성
+        // 학생 응답 생성
         List<EvidenceResponse> evidenceResponses = evidences.stream()
                 .map(EvidenceResponse::from)
                 .collect(Collectors.toList());
 
-        return NodeResponse.of(savedNode, title, evidenceResponses);
+        NodeResponse studentResponse = NodeResponse.of(savedNode, title, evidenceResponses);
+
+        // AI 응답 자동 생성
+        List<NodeResponse> aiResponses = new ArrayList<>();
+        try {
+            aiResponses = aiReviewService.generateAiResponse(studentAssignment.getId(), 1);
+        } catch (Exception e) {
+            System.err.println("메인 노드 생성 후 AI 응답 자동 생성 실패: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return StudentResponseWithAiResponse.builder()
+                .studentResponse(studentResponse)
+                .aiResponses(aiResponses)
+                .build();
     }
 
     public NodeDetailResponse getNodeDetail(Long nodeId) {
@@ -181,22 +252,54 @@ public class NodeService {
                 .build();
     }
 
+//    @Transactional
+//    public NodeResponse createStudentResponse(Long studentAssignmentId, StudentResponseRequest request) {
+//        StudentAssignment studentAssignment = studentAssignmentRepository.findById(studentAssignmentId)
+//                .orElseThrow(() -> new IllegalArgumentException("학생-과제 연결 정보를 찾을 수 없습니다."));
+//
+//        Assignment assignment = studentAssignment.getAssignment();
+//        String title = assignment != null ? assignment.getTopic() : "";
+//
+//        if (request.getTargetType() == TargetType.NODE) {
+//            // 질문 노드에 대한 답변
+//            return createAnswerNode(studentAssignment, request.getTargetId(), request.getContent(), title);
+//        } else {
+//            // 근거에 대한 재반박
+//            return createCounterClaimNode(studentAssignment, request.getTargetId(), request.getContent(),
+//                    request.getEvidences(), title);
+//        }
+//    }
     @Transactional
-    public NodeResponse createStudentResponse(Long studentAssignmentId, StudentResponseRequest request) {
+    public StudentResponseWithAiResponse createStudentResponse(Long studentAssignmentId, StudentResponseRequest request) {
         StudentAssignment studentAssignment = studentAssignmentRepository.findById(studentAssignmentId)
                 .orElseThrow(() -> new IllegalArgumentException("학생-과제 연결 정보를 찾을 수 없습니다."));
 
         Assignment assignment = studentAssignment.getAssignment();
         String title = assignment != null ? assignment.getTopic() : "";
 
+        NodeResponse studentResponse;
         if (request.getTargetType() == TargetType.NODE) {
             // 질문 노드에 대한 답변
-            return createAnswerNode(studentAssignment, request.getTargetId(), request.getContent(), title);
+            studentResponse = createAnswerNode(studentAssignment, request.getTargetId(), request.getContent(), title);
         } else {
             // 근거에 대한 재반박
-            return createCounterClaimNode(studentAssignment, request.getTargetId(), request.getContent(),
+            studentResponse = createCounterClaimNode(studentAssignment, request.getTargetId(), request.getContent(),
                     request.getEvidences(), title);
         }
+
+        // AI 응답 자동 생성
+        List<NodeResponse> aiResponses = new ArrayList<>();
+        try {
+            aiResponses = aiReviewService.generateAiResponse(studentAssignment.getId(), 1);
+        } catch (Exception e) {
+            System.err.println("학생 응답 생성 후 AI 응답 자동 생성 실패: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return StudentResponseWithAiResponse.builder()
+                .studentResponse(studentResponse)
+                .aiResponses(aiResponses)
+                .build();
     }
 
     private NodeResponse createAnswerNode(StudentAssignment studentAssignment, Long questionNodeId,
