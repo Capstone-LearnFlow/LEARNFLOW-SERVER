@@ -650,6 +650,9 @@ public class NodeService {
 
     @Transactional
     public NodeResponse updateNode(Long studentAssignmentId, Long nodeId, NodeUpdateRequest request) {
+        System.out.println("=== 학생 노드 수정 시작 ===");
+        System.out.println("Thread: " + Thread.currentThread().getName());
+
         // 1. 기존 노드 조회 및 권한 확인
         Node existingNode = nodeRepository.findById(nodeId)
                 .orElseThrow(() -> new IllegalArgumentException("해당 노드를 찾을 수 없습니다."));
@@ -711,15 +714,21 @@ public class NodeService {
             evidences.add(evidenceRepository.save(evidence));
         }
 
-        // 4. 새로운 트리 구조를 AI에게 전송하여 새로운 반박/질문 생성
-        requestAiResponseForUpdatedTree(studentAssignment);
-
         // 응답 생성
         List<EvidenceResponse> evidenceResponses = evidences.stream()
                 .map(EvidenceResponse::from)
                 .collect(Collectors.toList());
 
-        return NodeResponse.of(savedNode, title, evidenceResponses);
+        NodeResponse response = NodeResponse.of(savedNode, title, evidenceResponses);
+
+        System.out.println("=== 학생 노드 수정 완료 ===");
+        System.out.println("Node ID: " + savedNode.getId());
+
+        // 트랜잭션과 무관하게 즉시 비동기 AI 호출
+        asyncAiService.generateAiResponseAsync(studentAssignmentId);
+        System.out.println("=== 비동기 AI 요청 즉시 등록 완료 (노드 수정) ===");
+
+        return response;
     }
 
     private void hideNodeAndDescendants(Node node) {
